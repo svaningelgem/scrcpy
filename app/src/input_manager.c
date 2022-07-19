@@ -399,7 +399,7 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                     if ( !shift ) {
                         action_app_switch(controller, action);
                     } else {
-                        sc_screen_save_screenshot(controller);
+                        sc_screen_save_screenshot(im->screen);
                     }
                 }
                 return;
