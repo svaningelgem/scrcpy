@@ -978,3 +978,21 @@ sc_screen_hidpi_scale_coords(struct sc_screen *screen, int32_t *x, int32_t *y) {
     *x = (int64_t) *x * dw / ww;
     *y = (int64_t) *y * dh / wh;
 }
+
+void
+sc_screen_save_screenshot(struct sc_screen *screen) {
+    const struct sc_size window_size = get_window_size(screen);
+    const auto format = SDL_PIXELFORMAT_ARGB8888;
+
+    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(
+        0,
+        window_size.width,
+        window_size.height,
+        32,
+        format
+    );
+
+    SDL_RenderReadPixels(screen->renderer, NULL, format, surface->pixels, surface->pitch);
+    SDL_SavePNG(surface, "screenshot.png");
+    SDL_FreeSurface(surface);
+}
