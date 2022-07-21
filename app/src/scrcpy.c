@@ -1,4 +1,5 @@
 #include "scrcpy.h"
+#include "plugin.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -147,6 +148,8 @@ sdl_configure(bool display, bool disable_screensaver) {
     } else {
         SDL_EnableScreenSaver();
     }
+
+    plugin_init();
 }
 
 static enum scrcpy_exit_code

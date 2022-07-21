@@ -21,6 +21,7 @@ src = [
     'src/mouse_inject.c',
     'src/opengl.c',
     'src/options.c',
+    'src/plugin.c',
     'src/receiver.c',
     'src/recorder.c',
     'src/scrcpy.c',
