@@ -395,10 +395,10 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 }
                 return;
             case SDLK_s:
-                if (controller && !repeat) {
+                if (controller && !repeat ) {
                     if ( !shift ) {
                         action_app_switch(controller, action);
-                    } else {
+                    } else if ( down ) {
                         sc_screen_save_screenshot(im->screen);
                     }
                 }
