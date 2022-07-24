@@ -368,6 +368,8 @@ sc_input_manager_process_key(struct sc_input_manager *im,
     bool repeat = event->repeat;
 
     bool smod = is_shortcut_mod(im, mod);
+    
+    // printf("input received: keycode: %d, mod: %d, down: %d, ctrl: %d, shift: %d, repeat: %d, smod: %d\n", keycode, mod, down, ctrl, shift, repeat, smod);
 
     if (down && !repeat) {
         if (keycode == im->last_keycode && mod == im->last_mod) {
@@ -395,10 +397,10 @@ sc_input_manager_process_key(struct sc_input_manager *im,
                 }
                 return;
             case SDLK_s:
-                if (controller && !repeat) {
+                if (controller && !repeat ) {
                     if ( !shift ) {
                         action_app_switch(controller, action);
-                    } else {
+                    } else if ( down ) {
                         sc_screen_save_screenshot(im->screen);
                     }
                 }

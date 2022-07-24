@@ -167,6 +167,8 @@ if host_machine.system() == 'windows'
     dependencies += cc.find_library('ws2_32')
 endif
 
+dependencies += dependency('cpp-httplib')
+
 check_functions = [
     'strdup',
     'asprintf',

@@ -981,6 +981,7 @@ sc_screen_hidpi_scale_coords(struct sc_screen *screen, int32_t *x, int32_t *y) {
 
 void
 sc_screen_save_screenshot(struct sc_screen *screen) {
+    // printf(" -- Saving screenshot\n");
     const struct sc_size window_size = get_window_size(screen);
     const Uint32 format = SDL_PIXELFORMAT_ARGB8888;
 
@@ -995,4 +996,5 @@ sc_screen_save_screenshot(struct sc_screen *screen) {
     SDL_RenderReadPixels(screen->renderer, NULL, format, surface->pixels, surface->pitch);
     SDL_SaveBMP(surface, "screenshot.bmp");
     SDL_FreeSurface(surface);
+    // printf(" -- Done with screenshot\n");
 }
