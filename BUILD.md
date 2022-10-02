@@ -193,6 +193,11 @@ install it manually and make it available from the `PATH`:
 export PATH="$JAVA_HOME/bin:$PATH"
 ```
 
+If you need to install git, you can do this via pacman:
+```bash
+pacman -S git
+```
+
 ### Mac OS
 
 Install the packages with [Homebrew]:

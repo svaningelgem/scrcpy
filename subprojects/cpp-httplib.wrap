@@ -1,0 +1,4 @@
+[wrap-git]
+url = https://github.com/lammertb/libhttp.git
+revision = master
+depth = 1
