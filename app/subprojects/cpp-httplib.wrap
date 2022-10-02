@@ -1,4 +1,4 @@
 [wrap-git]
 url = https://github.com/yhirose/cpp-httplib
-revision = v0.10.9
+revision = v0.11.2
 depth = 1
