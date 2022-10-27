@@ -67,6 +67,7 @@ static void test_options(void) {
         "--window-y", "-1",
         "--window-width", "600",
         "--window-height", "0",
+        "--api-port", "8080",
         "--window-borderless",
     };
 

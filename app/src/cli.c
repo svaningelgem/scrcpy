@@ -57,6 +57,7 @@
 #define OPT_NO_CLEANUP             1037
 #define OPT_PRINT_FPS              1038
 #define OPT_NO_POWER_ON            1039
+#define OPT_API_PORT               1040
 
 struct sc_option {
     char shortopt;
@@ -546,6 +547,13 @@ static const struct sc_option options[] = {
         .argdesc = "value",
         .text = "Set the initial window height.\n"
                 "Default is 0 (automatic).",
+    },
+    {
+        .longopt_id = OPT_API_PORT,
+        .longopt = "api-port",
+        .argdesc = "value",
+        .text = "Set the port where the API is listening on.\n"
+                "Default is disabled.",
     },
 };
 
@@ -1131,6 +1139,18 @@ parse_rotation(const char *s, uint8_t *rotation) {
 }
 
 static bool
+parse_api_port(const char *s, uint16_t *api_port) {
+    long value;
+    bool ok = parse_integer_arg(s, &value, false, 1, 65535, "api-port");
+    if (!ok) {
+        return false;
+    }
+
+    *api_port = (uint16_t) value;
+    return true;
+}
+
+static bool
 parse_window_position(const char *s, int16_t *position) {
     // special value for "auto"
     static_assert(SC_WINDOW_POSITION_UNDEFINED == -0x8000, "unexpected value");
@@ -1548,6 +1568,11 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                 break;
             case OPT_ROTATION:
                 if (!parse_rotation(optarg, &opts->rotation)) {
+                    return false;
+                }
+                break;
+            case OPT_API_PORT:
+                if (!parse_api_port(optarg, &opts->api_port)) {
                     return false;
                 }
                 break;

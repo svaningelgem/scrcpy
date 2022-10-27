@@ -112,6 +112,7 @@ struct scrcpy_options {
     uint32_t display_id;
     sc_tick display_buffer;
     sc_tick v4l2_buffer;
+    uint16_t api_port;
 #ifdef HAVE_USB
     bool otg;
 #endif

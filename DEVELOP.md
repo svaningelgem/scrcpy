@@ -190,6 +190,7 @@ The client uses 4 threads:
  - the **controller** thread, sending _control messages_ to the server,
  - the **receiver** thread (managed by the controller), receiving _device
    messages_ from the server.
+ - the **api** thread (started with `--api`). For more info read [the API guide](API.md).
 
 In addition, another thread can be started if necessary to handle APK
 installation or file push requests (via drag&drop on the main window) or to

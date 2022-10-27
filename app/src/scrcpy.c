@@ -1,4 +1,5 @@
 #include "scrcpy.h"
+#include "api.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -354,6 +355,8 @@ scrcpy(struct scrcpy_options *options) {
 
     sdl_configure(options->display, options->disable_screensaver);
 
+    // TODO: init API
+
     // Await for server without blocking Ctrl+C handling
     bool connected;
     if (!await_for_server(&connected)) {
@@ -606,6 +609,9 @@ aoa_hid_end:
         if (!sc_screen_init(&s->screen, &screen_params)) {
             goto end;
         }
+
+        sc_api_start(&s->screen, options->api_port);
+
         screen_initialized = true;
 
         sc_decoder_add_sink(&s->decoder, &s->screen.frame_sink);
@@ -696,6 +702,8 @@ end:
     // Destroy the screen only after the demuxer is guaranteed to be finished,
     // because otherwise the screen could receive new frames after destruction
     if (screen_initialized) {
+        sc_api_stop();
+
         sc_screen_join(&s->screen);
         sc_screen_destroy(&s->screen);
     }

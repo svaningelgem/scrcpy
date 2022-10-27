@@ -30,6 +30,7 @@ const struct scrcpy_options scrcpy_options_default = {
     .max_fps = 0,
     .lock_video_orientation = SC_LOCK_VIDEO_ORIENTATION_UNLOCKED,
     .rotation = 0,
+    .api_port = 0,
     .window_x = SC_WINDOW_POSITION_UNDEFINED,
     .window_y = SC_WINDOW_POSITION_UNDEFINED,
     .window_width = 0,
