@@ -6,16 +6,27 @@
 #pragma comment(lib, "ws2_32") // link against Winsock on Windows
 #endif
 
+
+struct api_server_info {
+    struct sc_screen* screen;
+    uint16_t port;
+};
+
 static struct Server server = {0};
 
 
-static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* port_to_use) {
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* params) {
     serverInit(&server);
+
+    struct api_server_info* server_info = (api_server_info*)params;
+    server.tag = server_info->screen;
 
     struct sockaddr_in listen_on = {0};
     listen_on.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     listen_on.sin_family = AF_INET;
-    listen_on.sin_port = htons((unsigned short)port_to_use);
+    listen_on.sin_port = htons(server_info->port);
+    
+    free(server_info);
 
     acceptConnectionsUntilStopped(&server, (struct sockaddr*) &listen_on, sizeof(listen_on));
 
@@ -26,85 +37,80 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* port_to
 }
 
 
-struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
-    time_t t;
-    time(&t);
-    return responseAllocHTMLWithFormat("<html><h1>The time is seconds is %ld</h1></html>", t);
-}
-
-
-
-int
-api_error(httplib_connection *conn, const char* url, const char *method, const char *post_data) {
-    httplib_printf(
-            conn,
-            "HTTP/1.0 404 Bad Request\r\n"
-            "Content-Type: text/plain\r\n"
-            "\r\n"
-            "ERROR: Cannot interpret %s request to '%s'\r\n"
-            "POST data: '%s'",
-
-            url,
-            method,
-            post_data
+struct Response*
+api_error(const char* url, const char *method, const char *post_data) {
+    struct Response* response = responseAlloc(400, "Bad Request", "text/html; charset=UTF-8", 0);
+    heapStringAppendString(
+        &response->body,
+        "ERROR: Cannot interpret %s request to '%s'\r\nPOST data: '%s'",
+        method,
+        url,
+        post_data
     );
-
-    return 1;
+    return response;
 }
 
 
-int
-api_ok(httplib_connection *conn) {
-    httplib_printf(
-        conn,
-        "HTTP/1.0 200 OK\r\n"
-        "\r\n"
-    );
-
-    return 1;
+struct Response*
+api_ok() {
+    return responseAllocJSON("OK");
 }
 
-int
-api_tap(httplib_connection *conn, unsigned long x, unsigned long y) {
+
+struct Response*
+api_tap(struct sc_screen* screen, int32_t x, int32_t y) {
+
+    struct sc_mouse_click_event evt = {
+        .position = {
+            .screen_size = screen->frame_size,
+            .point = sc_screen_convert_window_to_frame_coords(screen, x, y),
+        },
+        .action = SC_ACTION_DOWN,
+        .button = SC_MOUSE_BUTTON_LEFT,
+        .buttons_state = SC_MOUSE_BUTTON_LEFT,
+    };
+
+    screen->im->mp->ops->process_mouse_click(screen->im->mp, &evt);
+
+    // And release it
+    evt.action = SC_ACTION_UP;
+    screen->im->mp->ops->process_mouse_click(screen->im->mp, &evt);
+
+    return api_ok();
+}
+
+
+struct Response*
+api_swipe(struct sc_screen* screen, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t speed) {
+    return responseAlloc400BadRequestHTML("Not implemented yet")
+    return api_ok();
+}
+
+
+struct Response*
+api_text(struct sc_screen* screen, char * text) {
+    return responseAlloc400BadRequestHTML("Not implemented yet")
+
+    if ( text == NULL ) {
+        return api_ok();
+    }
+    else if ( text[0] == 0 ) {
+        free(text);
+        return api_ok();
+    }
+
     SDL_Event sdlevent;
     ZeroMemory(&sdlevent, sizeof(sdlevent));
+    sdlevent.key.keysym.mod = 0;
 
-    sdlevent.type = SDL_MOUSEBUTTONDOWN;
-    sdlevent.button.button = SDL_BUTTON_LEFT;
-    sdlevent.button.state = SDL_PRESSED;
-    sdlevent.button.clicks = 1;
-    sdlevent.button.x = LOWORD(x);
-    sdlevent.button.y = HIWORD(y);
-    SDL_PushEvent(&sdlevent);
-
-    // And release it.
-    sdlevent.button.type = SDL_MOUSEBUTTONUP;
-    sdlevent.button.state = SDL_RELEASED;
-    SDL_PushEvent(&sdlevent);
-
-    return api_ok(conn);
-}
-
-
-int
-api_swipe(httplib_connection *conn, unsigned long x1, unsigned long y1, unsigned long x2, unsigned long y2, unsigned long speed) {
-    return 1;
-}
-
-
-int
-api_text(httplib_connection *conn, const char * text) {
-    SDL_Event sdlevent;
-    ZeroMemory(&sdlevent, sizeof(sdlevent));
-
-    for (int i = 0; i < strlen(text); ++i ) {
+    for ( int i = 0, end = strlen(text); i < end; ++i ) {
         const char c = text[i]
 
+        // Press the key
         sdlevent.type = SDL_KEYDOWN;
         sdlevent.key.state = SDL_PRESSED;
         sdlevent.key.keysym.scancode = SDL_GetScancodeFromKey(c);
         sdlevent.key.keysym.sym = c;
-        sdlevent.key.keysym.mod = 0;
         SDL_PushEvent(&sdlevent);
 
         // Release it
@@ -113,78 +119,87 @@ api_text(httplib_connection *conn, const char * text) {
         SDL_PushEvent(&sdlevent);
     }
 
-    return api_ok(conn);
+    free(text);
+
+    return api_ok();
 }
 
 
-int
-api_screenshot(httplib_connection *conn, unsigned long x1, unsigned long y1, unsigned long x2, unsigned long y2) {
-    return 1;
+struct Response*
+api_screenshot(struct sc_screen* screen, int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
+    return responseAlloc400BadRequestHTML("Not implemented yet")
+    return api_ok();
 }
 
 
-static int
-begin_request_handler(httplib_connection *conn) {
-    const struct httplib_request_info *ri = httplib_get_request_info(conn);
-    if ( ri->request_method != "POST" ) {
-        return api_error(conn, ri->uri, ri->request_method, "");
+int32_t
+_get_number(const struct Request* request, const char* param) {
+    char * tmp = strdupDecodePOSTParam(param, request, "");
+    int32_t ret_val = atoi(tmp);
+    free(tmp);
+    return ret_val;
+}
+
+
+struct Response*
+createResponseForRequest(const struct Request* request, struct Connection* connection) {
+    if ( strcasecmp(request->method, "POST") ) {
+        return api_error(request->path, request->method, request->body.contents);
     }
 
-    char post_data[1024];
-    int post_data_len = httplib_read(conn, post_data, sizeof(post_data));
+    struct sc_screen* screen = (sc_screen*)connection->server->tag;
+    if (!strcmp(request->path, "/tap")) {
+        return api_tap(
+            screen,
+            _get_number(request, "x="),
+            _get_number(request, "y=")
+        );
 
-    if (!strcmp(ri->uri, "/tap")) {
-        char x[10], y[10];
-
-        httplib_get_var(post_data, post_data_len, "x", x, sizeof(x));
-        httplib_get_var(post_data, post_data_len, "y", y, sizeof(y));
-
-        return api_tap(conn, atol(x), atol(y));
     }
 
-    if (!strcmp(ri->uri, "/swipe")) {
-        char x1[10], y1[10], x2[10], y2[10], speed[20];
-
-        httplib_get_var(post_data, post_data_len, "x1", x1, sizeof(x1));
-        httplib_get_var(post_data, post_data_len, "y1", y1, sizeof(y1));
-        httplib_get_var(post_data, post_data_len, "x2", x2, sizeof(x2));
-        httplib_get_var(post_data, post_data_len, "y2", y2, sizeof(y2));
-        httplib_get_var(post_data, post_data_len, "speed", speed, sizeof(speed));
-
-        return api_swipe(conn, atol(x1), atol(y1), atol(x2), atol(y2), atol(speed));
+    if (!strcmp(request->path, "/swipe")) {
+        return api_swipe(
+            screen,
+            _get_number(request, "x1="),
+            _get_number(request, "y1="),
+            _get_number(request, "x2="),
+            _get_number(request, "y2="),
+            _get_number(request, "speed=")
+        );
     }
 
-    if (!strcmp(ri->uri, "/text")) {
-        return api_text(conn, post_data);
+    if (!strcmp(request->path, "/text")) {
+        return api_text(screen, strdupDecodePOSTParam("text=", request, ""););
     }
 
-    if (!strcmp(ri->uri, "/screenshot")) {
-        char x1[10], y1[10], x2[10], y2[10];
-
-        httplib_get_var(post_data, post_data_len, "x1", x1, sizeof(x1));
-        httplib_get_var(post_data, post_data_len, "y1", y1, sizeof(y1));
-        httplib_get_var(post_data, post_data_len, "x2", x2, sizeof(x2));
-        httplib_get_var(post_data, post_data_len, "y2", y2, sizeof(y2));
-
-        return api_screenshot(conn, atol(x1), atol(y1), atol(x2), atol(y2));
+    if (!strcmp(request->path, "/screenshot")) {
+        return api_screenshot(
+            screen,
+            _get_number(request, "x1="),
+            _get_number(request, "y1="),
+            _get_number(request, "x2="),
+            _get_number(request, "y2="),
+        );
     }
 
-    return api_error(conn, ri->url, ri->request_method, post_data);
+    return api_error(request->path, request->method, request->body.contents);
 }
 
 
 bool
-sc_api_start(unsigned short api_port) {
-    if ( api_port == 0 || server.initialized ) {
+sc_api_start(struct sc_screen *screen, unsigned short api_port) {
+    if ( api_port == 0 ) {
         return false;
     }
+
+    struct api_server_info *server_info = malloc(sizeof(api_server_info));
+    server_info->screen = screen;
+    server_info->port = api_port;
 
     LOGD("Starting API service");
 
     pthread_t threadHandle;
-    pthread_create(&threadHandle, NULL, &acceptConnectionsThread, (void*)api_port);
-
-    return true;
+    return pthread_create(&threadHandle, NULL, &acceptConnectionsThread, (void*)serverinfo) == 0;
 }
 
 
