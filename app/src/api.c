@@ -1,24 +1,20 @@
 #include "api.h"
 #include "esw/EmbeddableWebServer.h"
-#include <time.h>
-
-#ifdef WIN32
-#pragma comment(lib, "ws2_32") // link against Winsock on Windows
-#endif
+#include "util/log.h"
 
 
-struct api_server_info {
+typedef struct api_server_info {
     struct sc_screen* screen;
     uint16_t port;
-};
+} api_server_info;
 
 static struct Server server = {0};
 
 
-static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* params) {
+THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* params) {
     serverInit(&server);
 
-    struct api_server_info* server_info = (api_server_info*)params;
+    api_server_info* server_info = (api_server_info*)params;
     server.tag = server_info->screen;
 
     struct sockaddr_in listen_on = {0};
@@ -40,7 +36,7 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* params)
 struct Response*
 api_error(const char* url, const char *method, const char *post_data) {
     struct Response* response = responseAlloc(400, "Bad Request", "text/html; charset=UTF-8", 0);
-    heapStringAppendString(
+    heapStringAppendFormat(
         &response->body,
         "ERROR: Cannot interpret %s request to '%s'\r\nPOST data: '%s'",
         method,
@@ -59,7 +55,6 @@ api_ok() {
 
 struct Response*
 api_tap(struct sc_screen* screen, int32_t x, int32_t y) {
-
     struct sc_mouse_click_event evt = {
         .position = {
             .screen_size = screen->frame_size,
@@ -70,11 +65,11 @@ api_tap(struct sc_screen* screen, int32_t x, int32_t y) {
         .buttons_state = SC_MOUSE_BUTTON_LEFT,
     };
 
-    screen->im->mp->ops->process_mouse_click(screen->im->mp, &evt);
+    screen->im.mp->ops->process_mouse_click(screen->im.mp, &evt);
 
     // And release it
     evt.action = SC_ACTION_UP;
-    screen->im->mp->ops->process_mouse_click(screen->im->mp, &evt);
+    screen->im.mp->ops->process_mouse_click(screen->im.mp, &evt);
 
     return api_ok();
 }
@@ -82,14 +77,17 @@ api_tap(struct sc_screen* screen, int32_t x, int32_t y) {
 
 struct Response*
 api_swipe(struct sc_screen* screen, int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t speed) {
-    return responseAlloc400BadRequestHTML("Not implemented yet")
+    (void)screen;(void)x1;(void)x2;(void)y1;(void)y2;(void)speed;
+
+    return responseAlloc400BadRequestHTML("Not implemented yet");
     return api_ok();
 }
 
 
 struct Response*
 api_text(struct sc_screen* screen, char * text) {
-    return responseAlloc400BadRequestHTML("Not implemented yet")
+    (void)screen;(void)text;
+    return responseAlloc400BadRequestHTML("Not implemented yet");
 
     if ( text == NULL ) {
         return api_ok();
@@ -98,7 +96,7 @@ api_text(struct sc_screen* screen, char * text) {
         free(text);
         return api_ok();
     }
-
+/*
     SDL_Event sdlevent;
     ZeroMemory(&sdlevent, sizeof(sdlevent));
     sdlevent.key.keysym.mod = 0;
@@ -118,7 +116,7 @@ api_text(struct sc_screen* screen, char * text) {
         sdlevent.key.state = SDL_RELEASED;
         SDL_PushEvent(&sdlevent);
     }
-
+*/
     free(text);
 
     return api_ok();
@@ -127,7 +125,8 @@ api_text(struct sc_screen* screen, char * text) {
 
 struct Response*
 api_screenshot(struct sc_screen* screen, int32_t x1, int32_t y1, int32_t x2, int32_t y2) {
-    return responseAlloc400BadRequestHTML("Not implemented yet")
+    (void)screen;(void)x1;(void)x2;(void)y1;(void)y2;
+    return responseAlloc400BadRequestHTML("Not implemented yet");
     return api_ok();
 }
 
@@ -147,7 +146,7 @@ createResponseForRequest(const struct Request* request, struct Connection* conne
         return api_error(request->path, request->method, request->body.contents);
     }
 
-    struct sc_screen* screen = (sc_screen*)connection->server->tag;
+    struct sc_screen* screen = (struct sc_screen*)connection->server->tag;
     if (!strcmp(request->path, "/tap")) {
         return api_tap(
             screen,
@@ -169,7 +168,7 @@ createResponseForRequest(const struct Request* request, struct Connection* conne
     }
 
     if (!strcmp(request->path, "/text")) {
-        return api_text(screen, strdupDecodePOSTParam("text=", request, ""););
+        return api_text(screen, strdupDecodePOSTParam("text=", request, ""));
     }
 
     if (!strcmp(request->path, "/screenshot")) {
@@ -178,7 +177,7 @@ createResponseForRequest(const struct Request* request, struct Connection* conne
             _get_number(request, "x1="),
             _get_number(request, "y1="),
             _get_number(request, "x2="),
-            _get_number(request, "y2="),
+            _get_number(request, "y2=")
         );
     }
 
@@ -192,14 +191,14 @@ sc_api_start(struct sc_screen *screen, unsigned short api_port) {
         return false;
     }
 
-    struct api_server_info *server_info = malloc(sizeof(api_server_info));
+    api_server_info *server_info = malloc(sizeof(api_server_info));
     server_info->screen = screen;
     server_info->port = api_port;
 
     LOGD("Starting API service");
 
     pthread_t threadHandle;
-    return pthread_create(&threadHandle, NULL, &acceptConnectionsThread, (void*)serverinfo) == 0;
+    return pthread_create(&threadHandle, NULL, &acceptConnectionsThread, (void*)server_info) == 0;
 }
 
 

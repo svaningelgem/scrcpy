@@ -1,5 +1,4 @@
 #include "scrcpy.h"
-#include "api.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -14,6 +13,7 @@
 # include <windows.h>
 #endif
 
+#include "api.h"
 #include "controller.h"
 #include "decoder.h"
 #include "demuxer.h"

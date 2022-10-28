@@ -126,6 +126,7 @@ typedef int64_t ssize_t;
     #define THREAD_RETURN_TYPE void*
 #endif // ! defined WIN_PTHREADS_H
 typedef SOCKET sockettype;
+#define CORRECT_SOCKET(x) ((x) != INVALID_SOCKET)
 #define STDCALL_ON_WIN32 WINAPI
 #else // not WIN32 - macOS/Linux
 #include <unistd.h>
@@ -137,9 +138,12 @@ typedef SOCKET sockettype;
 #include <dirent.h>
 #include <strings.h>
 typedef int sockettype;
+#define CORRECT_SOCKET(x) ((x) >= 0)
 #define STDCALL_ON_WIN32
 #define THREAD_RETURN_TYPE void*
 #endif
+
+#define UNUSED(x)
 
 typedef enum  {
     RequestParseStateMethod,
@@ -1479,11 +1483,13 @@ static void connectionFree(struct Connection* connection) {
     free(connection);
 }
 
+#ifndef WIN32
 static void SIGPIPEHandler(int signal) {
     (void) signal;
     /* SIGPIPE happens any time we try to send() and the connection is closed. So we just ignore it and check the return code of send...*/
     ews_printf_debug("Ignoring SIGPIPE\n");
 }
+#endif // !WIN32
 
 void serverInit(struct Server* server) {
     if (server->initialized) {
@@ -1513,7 +1519,7 @@ void serverStop(struct Server* server) {
     }
     serverMutexLock(server);
     server->shouldRun = false;
-    if (server->listenerfd >= 0) {
+    if ( CORRECT_SOCKET(server->listenerfd) ) {
         close(server->listenerfd);
     }
     serverMutexUnlock(server);
@@ -1574,7 +1580,10 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         strcpy(addressPort, "Unknown");
     }
     server->listenerfd = socket(address->sa_family, SOCK_STREAM, IPPROTO_TCP);
-    if (server->listenerfd  <= 0) {
+    if ( !CORRECT_SOCKET(server->listenerfd) ) {
+#ifdef WIN32
+        errno = WSAGetLastError();
+#endif
         ews_printf("Could not create listener socket: %s = %d\n", strerror(errno), errno);
         return 1;
     }
@@ -1622,7 +1631,10 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
     while (server->shouldRun) {
         nextConnection->remoteAddrLength = sizeof(nextConnection->remoteAddr);
         nextConnection->socketfd = accept(server->listenerfd , (struct sockaddr*) &nextConnection->remoteAddr, &nextConnection->remoteAddrLength);
-        if (-1 == nextConnection->socketfd) {
+        if ( !CORRECT_SOCKET(nextConnection->socketfd) ) {
+#ifdef WIN32
+            errno = WSAGetLastError();
+#endif
             if (errno == EINTR) {
                 ews_printf("accept was interrupted, continuing if server.shouldRun is true...\n");
                 continue;
@@ -1651,7 +1663,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         nextConnection = connectionAlloc(server);
     }
     serverMutexLock(server);
-    if (0 != server->listenerfd && errno != EBADF) {
+    if (CORRECT_SOCKET(server->listenerfd)) {
         close(server->listenerfd);
     }
     serverMutexUnlock(server);
@@ -1916,7 +1928,7 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
     pthread_cond_signal(&connection->server->connectionFinishedCond);
     pthread_mutex_unlock(&connection->server->connectionFinishedLock);
     connectionFree(connection);
-    return (THREAD_RETURN_TYPE) NULL;
+    return (THREAD_RETURN_TYPE) 0;
 }
 
 int serverMutexLock(struct Server* server) {
@@ -2189,7 +2201,8 @@ static DIR* opendir(const char* path) {
     wcscat(widePath, L"\\*");
     dirHandle->findFiles = FindFirstFileW(widePath, &dirHandle->findData);
     if (INVALID_HANDLE_VALUE == dirHandle->findFiles) {
-        ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %d\n", path, widePath, GetLastError());
+        DWORD lastError = GetLastError();
+        ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %ld\n", path, widePath, lastError);
         free(widePath);
         free(dirHandle);
         return NULL;
@@ -2226,7 +2239,7 @@ static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes) {
     assert(utf8StringLength < INT_MAX && "No strings over 2GB please because MultiByteToWideChar does not allow that");
     int wideStringRequiredChars = MultiByteToWideChar(CP_UTF8, 0, utf8String, (int) utf8StringLength, NULL, 0);
     wchar_t* wideString = (wchar_t*)calloc(1, sizeof(wchar_t) * (wideStringRequiredChars + 1 + extraBytes));
-    int result = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
+    MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
     return wideString;
 }
 
@@ -2275,7 +2288,7 @@ static int pthread_detach(pthread_t threadHandle) {
     return 0;
 }
 
-static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE threadRoutine, void* params) {
+static int pthread_create(HANDLE* threadHandle, const void* UNUSED(attributes), LPTHREAD_START_ROUTINE threadRoutine, void* params) {
     *threadHandle = CreateThread(NULL, 0, threadRoutine, params, 0, NULL);
     if (INVALID_HANDLE_VALUE == *threadHandle) {
         ews_printf("Whoa! Failed to create a thread for routine %p\n", threadRoutine);
@@ -2284,7 +2297,7 @@ static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD
     return 0;
 }
 
-static int pthread_cond_init(pthread_cond_t* cond, const void* attributes) {
+static int pthread_cond_init(pthread_cond_t* cond, const void* UNUSED(attributes)) {
     InitializeConditionVariable(cond);
     return 0;
 }
@@ -2301,11 +2314,11 @@ static int pthread_cond_signal(pthread_cond_t* cond) {
     return 0;
 }
 
-static int pthread_cond_destroy(pthread_cond_t* cond) {
+static int pthread_cond_destroy(pthread_cond_t* UNUSED(cond)) {
     return 0;
 }
 
-static int pthread_mutex_init(pthread_mutex_t* mutex, const void* attributes) {
+static int pthread_mutex_init(pthread_mutex_t* mutex, const void* UNUSED(attributes)) {
     InitializeCriticalSection(mutex);
     return 0;
 }
@@ -2330,11 +2343,12 @@ static void callWSAStartupIfNecessary() {
     // nifty trick from http://stackoverflow.com/questions/1869689/is-it-possible-to-tell-if-wsastartup-has-been-called-in-a-process
     // try to create a socket, and if that fails because of uninitialized winsock, then initialize winsock
     SOCKET testsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (SOCKET_ERROR == testsocket && WSANOTINITIALISED == WSAGetLastError()) {
+    if (!CORRECT_SOCKET(testsocket) && WSANOTINITIALISED == WSAGetLastError()) {
         WSADATA data = { 0 };
         int result = WSAStartup(MAKEWORD(2, 2), &data);
         if (0 != result) {
-            ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %d\n", result, GetLastError());
+            DWORD lastError = GetLastError();
+            ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %ld\n", result, lastError);
             abort();
         }
     } else {
