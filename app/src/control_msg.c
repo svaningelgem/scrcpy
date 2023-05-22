@@ -61,6 +61,22 @@ static const char *const copy_key_labels[] = {
     "cut",
 };
 
+static inline const char *
+get_well_known_pointer_id_name(uint64_t pointer_id) {
+    switch (pointer_id) {
+        case POINTER_ID_MOUSE:
+            return "mouse";
+        case POINTER_ID_GENERIC_FINGER:
+            return "finger";
+        case POINTER_ID_VIRTUAL_MOUSE:
+            return "vmouse";
+        case POINTER_ID_VIRTUAL_FINGER:
+            return "vfinger";
+        default:
+            return NULL;
+    }
+}
+
 static void
 write_position(uint8_t *buf, const struct sc_position *position) {
     sc_write32be(&buf[0], position->point.x);
@@ -101,8 +117,9 @@ sc_control_msg_serialize(const struct sc_control_msg *msg, unsigned char *buf) {
             uint16_t pressure =
                 sc_float_to_u16fp(msg->inject_touch_event.pressure);
             sc_write16be(&buf[22], pressure);
-            sc_write32be(&buf[24], msg->inject_touch_event.buttons);
-            return 28;
+            sc_write32be(&buf[24], msg->inject_touch_event.action_button);
+            sc_write32be(&buf[28], msg->inject_touch_event.buttons);
+            return 32;
         case SC_CONTROL_MSG_TYPE_INJECT_SCROLL_EVENT:
             write_position(&buf[1], &msg->inject_scroll_event.position);
             int16_t hscroll =
@@ -159,25 +176,29 @@ sc_control_msg_log(const struct sc_control_msg *msg) {
             int action = msg->inject_touch_event.action
                        & AMOTION_EVENT_ACTION_MASK;
             uint64_t id = msg->inject_touch_event.pointer_id;
-            if (id == POINTER_ID_MOUSE || id == POINTER_ID_VIRTUAL_FINGER) {
+            const char *pointer_name = get_well_known_pointer_id_name(id);
+            if (pointer_name) {
                 // string pointer id
                 LOG_CMSG("touch [id=%s] %-4s position=%" PRIi32 ",%" PRIi32
-                             " pressure=%f buttons=%06lx",
-                         id == POINTER_ID_MOUSE ? "mouse" : "vfinger",
+                             " pressure=%f action_button=%06lx buttons=%06lx",
+                         pointer_name,
                          MOTIONEVENT_ACTION_LABEL(action),
                          msg->inject_touch_event.position.point.x,
                          msg->inject_touch_event.position.point.y,
                          msg->inject_touch_event.pressure,
+                         (long) msg->inject_touch_event.action_button,
                          (long) msg->inject_touch_event.buttons);
             } else {
                 // numeric pointer id
                 LOG_CMSG("touch [id=%" PRIu64_ "] %-4s position=%" PRIi32 ",%"
-                             PRIi32 " pressure=%f buttons=%06lx",
+                             PRIi32 " pressure=%f action_button=%06lx"
+                             " buttons=%06lx",
                          id,
                          MOTIONEVENT_ACTION_LABEL(action),
                          msg->inject_touch_event.position.point.x,
                          msg->inject_touch_event.position.point.y,
                          msg->inject_touch_event.pressure,
+                         (long) msg->inject_touch_event.action_button,
                          (long) msg->inject_touch_event.buttons);
             }
             break;
